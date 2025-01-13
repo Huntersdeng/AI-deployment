@@ -1,0 +1,15 @@
+ultralytics==8.3.58
+torch==2.4.0
+torchsummary==1.5.1
+torchvision==0.19.0
+tqdm==4.66.5
+onnx
+dill
+onnxruntime
+pycuda
+numpy
+absl-py>=0.7.0
+scipy
+sphinx_glpi_theme
+prettytable
+pyyaml
