@@ -1,12 +1,11 @@
 FROM nvcr.io/nvidia/cuda:12.3.2-cudnn9-devel-ubuntu22.04
 
-RUN apt-get update
 RUN sed -i 's|http://ports.ubuntu.com/|http://mirrors.ustc.edu.cn/|g' /etc/apt/sources.list
 RUN sed -i 's|http://archive.ubuntu.com/|http://mirrors.ustc.edu.cn/|g' /etc/apt/sources.list
 RUN sed -i 's|http://security.ubuntu.com/|http://mirrors.ustc.edu.cn/|g' /etc/apt/sources.list
+RUN apt-get update
 
-RUN apt-get install -y --no-install-recommends libcublas-dev-12-3 cuda-nvcc-12-3 \
-    tensorrt-dev=8.6.0.12-1+cuda12.0 \
+RUN apt-get install -y --no-install-recommends tensorrt-dev=8.6.0.12-1+cuda12.0 \
     libnvinfer8=8.6.0.12-1+cuda12.0 \
     libnvinfer-dev=8.6.0.12-1+cuda12.0 \
     libnvinfer-plugin-dev=8.6.0.12-1+cuda12.0 \
@@ -29,7 +28,7 @@ RUN apt-get install -y --no-install-recommends libcublas-dev-12-3 cuda-nvcc-12-3
     libcublas-12-5- cuda-toolkit-12-5-config-common- \
     libcublas-12-6- cuda-toolkit-12-6-config-common-
 
-RUN apt update
+RUN apt install -y --no-install-recommends cmake
 RUN apt install -y --no-install-recommends python3 python3-dev python3-pip 
 RUN apt install -y --no-install-recommends python3-libnvinfer-dev=8.6.0.12-1+cuda12.0 \ 
     python3-libnvinfer-lean=8.6.0.12-1+cuda12.0 \

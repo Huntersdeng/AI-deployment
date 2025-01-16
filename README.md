@@ -27,7 +27,7 @@ This repository contains the code for deploying an AI model using python api, in
 # Usage
 1. export pytorch model to TensorRT engine (without quantization)
 - step1: export pytorch model to ONNX Format \
-`python3 export/onnx_export/yolov8_seg.py -w weights/best.pt --opset 13`
+`python3 export/onnx_export/yolov8_seg.py -w weights/best.pt --opset 13 --sim`
 
 - step2: export ONNX model to TensorRT engine \
 `python3 export/trt_export.py --onnx weights/best.onnx --precision fp32`
@@ -37,7 +37,7 @@ Create a folder and put your images in it. \
 
 2. export pytorch model to TensorRT engine (with int8 quantization)
 - step1: Use calibration data to quantize model and export pytorch model to ONNX Format \
-`python3 export/onnx_export/yolov8_seg_ptq.py -w weights/best.pt --calib-data`. \
+`python3 export/onnx_export/yolov8_seg_ptq.py -w weights/best.pt --calib-data ./calib_data/calib_data.txt --opset 13 --sim`. \
 You should create a txt file that contains the path of calibration images, like this: 
 ```
 /app/images/cam2.1702989848.748686000.jpg
