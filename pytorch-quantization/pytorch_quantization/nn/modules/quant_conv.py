@@ -1,5 +1,5 @@
 #
-# SPDX-FileCopyrightText: Copyright (c) 1993-2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 1993-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,6 +23,7 @@ easily, and load pretrained weight. Aliases with Quant prefix are defined and ar
 when start scratch.
 """
 
+import inspect
 import torch
 import torch.nn
 import torch.nn.functional as F
@@ -110,8 +111,7 @@ class QuantConv2d(_QuantConvNd):
         padding = _pair(padding)
         dilation = _pair(dilation)
 
-        quant_desc_input, quant_desc_weight = _utils.pop_quant_desc_in_kwargs(
-            self.__class__, **kwargs)
+        quant_desc_input, quant_desc_weight = _utils.pop_quant_desc_in_kwargs(self.__class__, **kwargs)
         super(QuantConv2d, self).__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, False,
                                           _pair(0), groups, bias, padding_mode,
                                           quant_desc_input=quant_desc_input, quant_desc_weight=quant_desc_weight)
@@ -154,8 +154,7 @@ class QuantConv3d(_QuantConvNd):
         stride = _triple(stride)
         padding = _triple(padding)
         dilation = _triple(dilation)
-        quant_desc_input, quant_desc_weight = _utils.pop_quant_desc_in_kwargs(
-            self.__class__, **kwargs)
+        quant_desc_input, quant_desc_weight = _utils.pop_quant_desc_in_kwargs(self.__class__, **kwargs)
         super(QuantConv3d, self).__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, False,
                                           _triple(0), groups, bias, padding_mode,
                                           quant_desc_input=quant_desc_input, quant_desc_weight=quant_desc_weight)
@@ -199,8 +198,7 @@ class QuantConv1d(_QuantConvNd):
         stride = _single(stride)
         padding = _single(padding)
         dilation = _single(dilation)
-        quant_desc_input, quant_desc_weight = _utils.pop_quant_desc_in_kwargs(
-            self.__class__, **kwargs)
+        quant_desc_input, quant_desc_weight = _utils.pop_quant_desc_in_kwargs(self.__class__, **kwargs)
         super(QuantConv1d, self).__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, False,
                                           _single(0), groups, bias, padding_mode,
                                           quant_desc_input=quant_desc_input, quant_desc_weight=quant_desc_weight)
@@ -246,7 +244,6 @@ class _QuantConvTransposeNd(torch.nn.modules.conv._ConvTransposeNd, _utils.Quant
 
     default_quant_desc_input = tensor_quant.QUANT_DESC_8BIT_PER_TENSOR
     default_quant_desc_weight = tensor_quant.QUANT_DESC_8BIT_PER_TENSOR
-
     def __init__(self, in_channels, out_channels, kernel_size, stride,
                  padding, dilation, transposed, output_padding,
                  groups, bias, padding_mode, quant_desc_input, quant_desc_weight):
@@ -269,6 +266,19 @@ class _QuantConvTransposeNd(torch.nn.modules.conv._ConvTransposeNd, _utils.Quant
         quant_weight = self._weight_quantizer(self.weight)
 
         return (quant_input, quant_weight)
+
+    def _output_padding_nd(self,
+                           input,
+                           output_size,
+                           stride,
+                           padding,
+                           kernel_size,
+                           num_spatial_dims,
+                           dilation=None):
+        if "num_spatial_dims" in inspect.signature(self._output_padding).parameters:
+            return self._output_padding(input, output_size, stride, padding, kernel_size, num_spatial_dims)
+        else:
+            return self._output_padding(input, output_size, stride, padding, kernel_size)
 
 
 class QuantConvTranspose1d(_QuantConvTransposeNd):
@@ -293,8 +303,7 @@ class QuantConvTranspose1d(_QuantConvTransposeNd):
         padding = _single(padding)
         dilation = _single(dilation)
         output_padding = _single(output_padding)
-        quant_desc_input, quant_desc_weight = _utils.pop_quant_desc_in_kwargs(
-            self.__class__, **kwargs)
+        quant_desc_input, quant_desc_weight = _utils.pop_quant_desc_in_kwargs(self.__class__, **kwargs)
         super(QuantConvTranspose1d, self).__init__(
             in_channels, out_channels, kernel_size, stride, padding, dilation,
             True, output_padding, groups, bias, padding_mode,
@@ -304,8 +313,9 @@ class QuantConvTranspose1d(_QuantConvTransposeNd):
         if self.padding_mode != 'zeros':
             raise ValueError('Only `zeros` padding mode is supported for QuantConvTranspose1d')
 
-        output_padding = self._output_padding(
-            input, output_size, self.stride, self.padding, self.kernel_size)
+        num_spatial_dims = 1
+        output_padding = self._output_padding_nd(input, output_size, self.stride, self.padding, self.kernel_size,
+                                                 num_spatial_dims)
 
         quant_input, quant_weight = self._quant(input)
         output = F.conv_transpose1d(quant_input, quant_weight, self.bias, self.stride, self.padding, output_padding,
@@ -335,8 +345,7 @@ class QuantConvTranspose2d(_QuantConvTransposeNd):
         padding = _pair(padding)
         dilation = _pair(dilation)
         output_padding = _pair(output_padding)
-        quant_desc_input, quant_desc_weight = _utils.pop_quant_desc_in_kwargs(
-            self.__class__, **kwargs)
+        quant_desc_input, quant_desc_weight = _utils.pop_quant_desc_in_kwargs(self.__class__, **kwargs)
         super(QuantConvTranspose2d, self).__init__(
             in_channels, out_channels, kernel_size, stride, padding, dilation,
             True, output_padding, groups, bias, padding_mode,
@@ -346,8 +355,9 @@ class QuantConvTranspose2d(_QuantConvTransposeNd):
         if self.padding_mode != 'zeros':
             raise ValueError('Only `zeros` padding mode is supported for QuantConvTranspose2d')
 
-        output_padding = self._output_padding(
-            input, output_size, self.stride, self.padding, self.kernel_size, 2)
+        num_spatial_dims = 2
+        output_padding = self._output_padding_nd(input, output_size, self.stride, self.padding, self.kernel_size,
+                                                 num_spatial_dims)
 
         quant_input, quant_weight = self._quant(input)
         output = F.conv_transpose2d(quant_input, quant_weight, self.bias, self.stride, self.padding, output_padding,
@@ -378,8 +388,7 @@ class QuantConvTranspose3d(_QuantConvTransposeNd):
         padding = _triple(padding)
         dilation = _triple(dilation)
         output_padding = _triple(output_padding)
-        quant_desc_input, quant_desc_weight = _utils.pop_quant_desc_in_kwargs(
-            self.__class__, **kwargs)
+        quant_desc_input, quant_desc_weight = _utils.pop_quant_desc_in_kwargs(self.__class__, **kwargs)
         super(QuantConvTranspose3d, self).__init__(
             in_channels, out_channels, kernel_size, stride, padding, dilation,
             True, output_padding, groups, bias, padding_mode,
@@ -389,8 +398,9 @@ class QuantConvTranspose3d(_QuantConvTransposeNd):
         if self.padding_mode != 'zeros':
             raise ValueError('Only `zeros` padding mode is supported for QuantConvTranspose3d')
 
-        output_padding = self._output_padding(
-            input, output_size, self.stride, self.padding, self.kernel_size)
+        num_spatial_dims = 3
+        output_padding = self._output_padding_nd(input, output_size, self.stride, self.padding, self.kernel_size,
+                                                 num_spatial_dims)
 
         quant_input, quant_weight = self._quant(input)
         output = F.conv_transpose3d(quant_input, quant_weight, self.bias, self.stride, self.padding, output_padding,
