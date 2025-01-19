@@ -15,6 +15,7 @@ This repository contains the code for deploying an AI model using python api, in
 - inference with TensorRT engine
 4. Now support models (Updating):
 - yolov8
+- crnn
 
 # Environment
 ## Build docker image

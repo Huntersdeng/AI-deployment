@@ -12,6 +12,7 @@ from copy import copy
 import time
 
 sys.path.append('.')
+from ai_engine import setup_model
 
 OBJ_THRESH = 0.25
 NMS_THRESH = 0.45
@@ -452,30 +453,6 @@ def merge_seg(image, seg_img, classes):
         seg = seg.astype(np.uint8)
         image = cv2.add(image, seg)
     return image
-
-
-def setup_model(args):
-    model_path = args.model_path
-    if model_path.endswith(".pt") or model_path.endswith(".torchscript"):
-        platform = "pytorch"
-        from ai_engine.ai_engine_torch import AiEngineTorch
-        model = AiEngineTorch(args.model_path)
-    elif model_path.endswith(".rknn"):
-        platform = "rknn"
-        from ai_engine.ai_engine_rknn import AiEngineRknn
-        model = AiEngineRknn(args.model_path)
-    elif model_path.endswith("onnx"):
-        platform = "onnx"
-        from ai_engine.ai_engine_onnx import AiEngineOnnx
-        model = AiEngineOnnx(args.model_path)
-    elif model_path.endswith("trt"):
-        platform = "TensorRT"
-        from ai_engine.ai_engine_trt import AiEngineTrt
-        model = AiEngineTrt(args.model_path)
-    else:
-        assert False, "{} is not rknn/pytorch/onnx model".format(model_path)
-    print("Model-{} is {} model, starting inference".format(model_path, platform))
-    return model, platform
 
 
 def img_check(path):

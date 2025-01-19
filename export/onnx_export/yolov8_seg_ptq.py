@@ -56,30 +56,12 @@ def optim(module: nn.Module):
     if s == "Segment":
         setattr(module, "__class__", PostSeg)
 
-
-class CalibDataset(torch.utils.data.Dataset):
-    def __init__(self, txt_file,  image_size):
-        with open(txt_file, 'r') as f:
-            self.image_list = f.read().split()
-        self.image_size = image_size
-        self.transform = transforms.Compose([
-            transforms.ToTensor(),
-        ])
-
-    def __len__(self):
-        return len(self.image_list)
-
-    def __getitem__(self, index: int):
-        img_path = self.image_list[index]
-        if not os.path.exists(img_path):
-            print(f"{img_path} is not found")
-            return None
-
-        img = Image.open(img_path)
-        img = self.letterbox(img, self.image_size, (114, 114, 114))
-        return self.transform(img)
-
-    def letterbox(self, image, target_size, color=(0, 0, 0)):
+class LetterBox:
+    def __init__(self, ouptut_size, padding):
+        self.output_size = ouptut_size
+        self.padding = padding
+        
+    def __call__(self, image):
         """
         将图像调整为目标大小，同时保持宽高比，使用填充。
 
@@ -93,7 +75,7 @@ class CalibDataset(torch.utils.data.Dataset):
         """
         # 获取原始图像的宽和高
         original_width, original_height = image.size
-        target_width, target_height = target_size
+        target_width, target_height = self.output_size
 
         # 计算宽高比
         ratio = min(target_width / original_width, target_height / original_height)
@@ -104,7 +86,7 @@ class CalibDataset(torch.utils.data.Dataset):
         resized_image = image.resize((new_width, new_height), Image.BILINEAR)
 
         # 创建一个新的图像，填充为目标大小
-        new_image = Image.new("RGB", target_size, color)
+        new_image = Image.new("RGB", self.output_size, self.padding)
 
         # 计算填充的位置
         x_offset = (target_width - new_width) // 2
@@ -115,61 +97,20 @@ class CalibDataset(torch.utils.data.Dataset):
 
         return new_image
 
-
-def collect_stats(model, data_loader, num_batches):
-    """Feed data to the network and collect statistic"""
-    print("Feed data to the network and collect statistic")
-    # Enable calibrators
-    for name, module in model.named_modules():
-        if isinstance(module, quant_nn.TensorQuantizer):
-            if module._calibrator is not None:
-                module.disable_quant()
-                module.enable_calib()
-            else:
-                module.disable()
-
-    for i, image in tqdm(enumerate(data_loader), total=num_batches):
-        model(image.cuda())
-        if i >= num_batches:
-            break
-
-    # Disable calibrators
-    for name, module in model.named_modules():
-        if isinstance(module, quant_nn.TensorQuantizer):
-            if module._calibrator is not None:
-                module.enable_quant()
-                module.disable_calib()
-            else:
-                module.enable()
-
-
-def compute_amax(model, **kwargs):
-    # Load calib result
-    for name, module in model.named_modules():
-        if isinstance(module, quant_nn.TensorQuantizer):
-            if module._calibrator is not None:
-                if isinstance(module._calibrator, calib.MaxCalibrator):
-                    module.load_calib_amax(strict=False)
-                else:
-                    module.load_calib_amax(**kwargs, strict=False)
-            print(F"{name:40}: {module}")
-    model.cuda()
-
-
 def prepare_model(weight):
     quant_utils.initialize_calib_method(per_channel_quantization=True, calib_method="histogram")
     yolo = YOLO(weight)
     model = yolo.model
     model.float()
     model.eval()
+    with torch.no_grad():
+        model.fuse()
     for m in model.modules():
         optim(m)
 
-    with torch.no_grad():
-        model.fuse()
     model.cuda()
 
-    quant_utils.replace_to_quantization_module(model, ignore_policy=[])
+    # quant_utils.replace_to_quantization_module(model, ignore_policy=[])
 
     return model
 
@@ -200,14 +141,15 @@ def parse_args():
 def main(args):
     model = prepare_model(args.weights)
     # model.info(True)
-    dataset = CalibDataset(args.calib_data, [args.input_shape[3], args.input_shape[2]])
+    transform = transforms.Compose([LetterBox((640, 640), (114,114,114)), transforms.ToTensor()])
+    dataset = quant_utils.CalibDataset(args.calib_data, transform)
     dataloader = torch.utils.data.DataLoader(dataset,
                                              batch_size=16,
                                              shuffle=False,
                                              num_workers=2)
     with torch.no_grad():
-        collect_stats(model, dataloader, num_batches=4)
-        compute_amax(model, method=args.quant_method)
+        quant_utils.collect_stats(model, dataloader, num_batches=4)
+        quant_utils.compute_amax(model, method=args.quant_method)
 
     fake_input = torch.randn(args.input_shape).cuda()
     for _ in range(2):

@@ -28,6 +28,7 @@ RUN apt-get install -y --no-install-recommends tensorrt-dev=8.6.0.12-1+cuda12.0 
     libcublas-12-5- cuda-toolkit-12-5-config-common- \
     libcublas-12-6- cuda-toolkit-12-6-config-common-
 
+RUN apt update
 RUN apt install -y --no-install-recommends cmake
 RUN apt install -y --no-install-recommends python3 python3-dev python3-pip 
 RUN apt install -y --no-install-recommends python3-libnvinfer-dev=8.6.0.12-1+cuda12.0 \ 

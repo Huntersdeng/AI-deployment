@@ -25,21 +25,21 @@ class AiEngineTrt:
     def __init__(self, model_path) -> None:
         with open(model_path, "rb") as f, trt.Runtime(TRT_LOGGER) as runtime:
             self.engine = runtime.deserialize_cuda_engine(f.read())
+        self.context = self.engine.create_execution_context()
+        self.inputs, self.outputs, self.bindings, self.stream = self.allocate_buffers(self.engine)
 
     def run(self, input_datas):
-        with self.engine.create_execution_context() as context:
-            inputs, outputs, bindings, stream = self.allocate_buffers(self.engine)
-            if (len(input_datas) != len(inputs)):
-                raise ValueError("input data size not match")
-            for i in range(len(input_datas)):
-                np.copyto(inputs[i].host, input_datas[i].reshape(-1).ravel())
-            t_outputs = self.do_inference(
-                context,
-                bindings=bindings,
-                inputs=inputs,
-                outputs=outputs,
-                stream=stream,
-            )
+        if (len(input_datas) != len(self.inputs)):
+            raise ValueError("input data size not match")
+        for i in range(len(input_datas)):
+            np.copyto(self.inputs[i].host, input_datas[i].reshape(-1).ravel())
+        t_outputs = self.do_inference(
+            self.context,
+            bindings=self.bindings,
+            inputs=self.inputs,
+            outputs=self.outputs,
+            stream=self.stream,
+        )
         return t_outputs
 
     def allocate_buffers(self, engine):

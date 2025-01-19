@@ -1,5 +1,6 @@
 from typing import List
 import json
+import os
 
 # PyTorch
 import torch
@@ -11,56 +12,65 @@ from pytorch_quantization import calib
 from pytorch_quantization.tensor_quant import QuantDescriptor
 from pytorch_quantization import quant_modules
 from absl import logging as quant_logging
-import pdb
+from tqdm import tqdm
+from PIL import Image
+        
+class CalibDataset(torch.utils.data.Dataset):
+    def __init__(self, txt_file, transform):
+        with open(txt_file, 'r') as f:
+            self.image_list = f.read().split()
+        self.transform = transform
 
+    def __len__(self):
+        return len(self.image_list)
 
-class SummaryTool:
-    def __init__(self, file):
-        self.file = file
-        self.data = []
+    def __getitem__(self, index: int):
+        img_path = self.image_list[index]
+        if not os.path.exists(img_path):
+            print(f"{img_path} is not found")
+            return None
 
-    def append(self, item):
-        self.data.append(item)
-        json.dump(self.data, open(self.file, "w"), indent=4)
-
-
-def have_quantizer(module):
-    for name, module in module.named_modules():
+        img = Image.open(img_path)
+        return self.transform(img)
+        
+def collect_stats(model, data_loader, num_batches):
+    """Feed data to the network and collect statistic"""
+    print("Feed data to the network and collect statistic")
+    # Enable calibrators
+    for name, module in model.named_modules():
         if isinstance(module, quant_nn.TensorQuantizer):
-            return True
+            if module._calibrator is not None:
+                module.disable_quant()
+                module.enable_calib()
+            else:
+                module.disable()
+
+    for i, image in tqdm(enumerate(data_loader), total=num_batches):
+        model(image.cuda())
+        if i >= num_batches:
+            break
+
+    # Disable calibrators
+    for name, module in model.named_modules():
+        if isinstance(module, quant_nn.TensorQuantizer):
+            if module._calibrator is not None:
+                module.enable_quant()
+                module.disable_calib()
+            else:
+                module.enable()
 
 
-class disable_quantization:
-    def __init__(self, model):
-        self.model = model
-
-    def apply(self, disabled=True):
-        for name, module in self.model.named_modules():
-            if isinstance(module, quant_nn.TensorQuantizer):
-                module._disabled = disabled
-
-    def __enter__(self):
-        self.apply(True)
-
-    def __exit__(self, *args, **kwargs):
-        self.apply(False)
-
-
-class enable_quantization:
-    def __init__(self, model):
-        self.model = model
-
-    def apply(self, enabled=True):
-        for name, module in self.model.named_modules():
-            if isinstance(module, quant_nn.TensorQuantizer):
-                module._disabled = not enabled
-
-    def __enter__(self):
-        self.apply(True)
-        return self
-
-    def __exit__(self, *args, **kwargs):
-        self.apply(False)
+def compute_amax(model, **kwargs):
+    # Load calib result
+    for name, module in model.named_modules():
+        if isinstance(module, quant_nn.TensorQuantizer):
+            if module._calibrator is not None:
+                if isinstance(module._calibrator, calib.MaxCalibrator):
+                    module.load_calib_amax(strict=False)
+                else:
+                    module.load_calib_amax(**kwargs, strict=False)
+            print(F"{name:40}: {module}")
+    model.cuda()
 
 
 # Initialize PyTorch Quantization
@@ -71,6 +81,7 @@ def initialize_calib_method(per_channel_quantization=True, calib_method="histogr
         quant_nn.QuantConv2d.set_default_quant_desc_input(quant_desc_input)
         quant_nn.QuantMaxPool2d.set_default_quant_desc_input(quant_desc_input)
         quant_nn.QuantLinear.set_default_quant_desc_input(quant_desc_input)
+        quant_nn.QuantLSTM.set_default_quant_desc_input(quant_desc_input)
         quant_logging.set_verbosity(quant_logging.ERROR)
 
     else:
@@ -84,8 +95,9 @@ def initialize_calib_method(per_channel_quantization=True, calib_method="histogr
         quant_nn.QuantConv2d.set_default_quant_desc_weight(quant_desc_weight)
         quant_nn.QuantMaxPool2d.set_default_quant_desc_weight(quant_desc_weight)
         quant_nn.QuantLinear.set_default_quant_desc_weight(quant_desc_weight)
+        quant_nn.QuantLSTM.set_default_quant_desc_weight(quant_desc_weight)
         quant_logging.set_verbosity(quant_logging.ERROR)
-    # quant_modules.initialize()
+    quant_modules.initialize()
 
 
 def transfer_torch_to_quantization(nninstance: torch.nn.Module, quantmodule):
